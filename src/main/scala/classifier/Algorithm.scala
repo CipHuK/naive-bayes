@@ -7,12 +7,12 @@ trait FeatureProbability[T, K] {
   // K - category
 }
 
-private[classifier] class Model[K](lengths: Map[K, Int],
+private[classifier] class Model[K, S](lengths: Map[K, Int],
                                    docCount: Map[K, Int],
-                                   wordCount: Map[K, Map[String, Int]],
+                                   wordCount: Map[K, Map[S, Int]],
                                    dictionarySize: Int) {
 
-  def wordProbability(category: K, word: String): Double =
+  def wordProbability(category: K, word: S): Double =
     log((wordCount(category).getOrElse(word, 0) + 1.0) / (lengths(category).toDouble + dictionarySize))
 
   def classProbability(category: K): Double = log(docCount(category).toDouble / docCount.values.sum)
@@ -20,7 +20,7 @@ private[classifier] class Model[K](lengths: Map[K, Int],
   def classes: Set[K] = docCount.keySet
 }
 
-private[classifier] class Classifier[K](model: Model[K]) {
+private[classifier] class Classifier[K](model: Model[K, String]) {
   def classify(str: String): K =
     model.classes.toList.map(c => (c, calculateProbability(c, str))).maxBy(_._2)._1
 
@@ -31,17 +31,19 @@ private[classifier] class Classifier[K](model: Model[K]) {
 }
 
 class Algorithm[K] {
-  private var examples: List[(String, K)] = List()
+  type Ratio = (String, K)
+
+  private var examples: List[Ratio] = List()
 
   private val tokenize = (v: String) => v.split(' ')
-  private val tokenizeTuple = (v: (String, K)) => tokenize(v._1)
-  private val calculateWords = (l: List[(String, K)]) => l.map(tokenizeTuple(_).length).sum
+  private val tokenizeTuple = (v: Ratio) => tokenize(v._1)
+  private val calculateWords = (l: List[Ratio]) => l.map(tokenizeTuple(_).length).sum
 
   def addExample(ex: String, cl: K): Unit = examples ::= (ex, cl)
 
   def dictionary: Set[String] = examples.map(tokenizeTuple).flatten.toSet
 
-  def model: Model[K] = {
+  def model: Model[K, String] = {
     val docsByClass = examples.groupBy(_._2)
     val lengths = docsByClass.view.mapValues(calculateWords).toMap
     val docCounts = docsByClass.view.mapValues(_.length).toMap
